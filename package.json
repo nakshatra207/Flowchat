@@ -13,6 +13,8 @@
     "build": "npm run build --workspace backend && npm run build --workspace frontend",
     "test": "npm test --workspace backend",
     "lint": "npm run lint --workspace backend && npm run lint --workspace frontend"
+  },
+  "dependencies": {
+    "puppeteer": "^25.1.0"
   }
 }
-

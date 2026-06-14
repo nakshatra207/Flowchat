@@ -20,6 +20,15 @@ export function getSocket() {
   return socket;
 }
 
+export function updateSocketToken() {
+  if (socket) {
+    const tokens = readStoredTokens();
+    if (tokens?.accessToken) {
+      socket.auth = { token: tokens.accessToken };
+    }
+  }
+}
+
 export function resetSocket() {
   if (socket) {
     socket.disconnect();

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api, clearStoredTokens, persistTokens, readStoredTokens, setAuthToken } from "../lib/api";
-import { resetSocket } from "../lib/socket";
+import { resetSocket, updateSocketToken } from "../lib/socket";
 import type { AuthTokens, User } from "../types/api";
 
 interface AuthState {
@@ -24,11 +24,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       password
     });
     persistTokens(data.tokens);
+    updateSocketToken();
     set({ user: data.user, tokens: data.tokens });
   },
   async register(payload) {
     const { data } = await api.post<{ user: User; tokens: AuthTokens }>("/auth/register", payload);
     persistTokens(data.tokens);
+    updateSocketToken();
     set({ user: data.user, tokens: data.tokens });
   },
   async bootstrap() {

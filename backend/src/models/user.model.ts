@@ -82,11 +82,11 @@ const userSchema = new Schema(
   {
     timestamps: true,
     toJSON: {
-    transform: (_doc, ret) => {
-        const serialized = ret as Record<string, unknown>;
-        delete serialized.passwordHash;
-        delete serialized.refreshTokenHash;
-        delete serialized.__v;
+      transform: (_doc, ret) => {
+        const obj = ret as Record<string, unknown>;
+        delete obj.passwordHash;
+        delete obj.refreshTokenHash;
+        delete obj.__v;
         return ret;
       }
     }

@@ -32,7 +32,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
 
   if (!conversation) throw new AppError("Conversation not found", 404);
 
-  const attachmentIds = (req.body.attachmentIds as string[]).map((id) => toObjectId(id, "attachment id"));
+  const attachmentIds = (req.body.attachmentIds as string[] | undefined)?.map((id) => toObjectId(id, "attachment id")) ?? [];
   if (!req.body.content && attachmentIds.length === 0) {
     throw new AppError("Message content or attachment is required", 400);
   }

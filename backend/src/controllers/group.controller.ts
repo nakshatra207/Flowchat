@@ -22,7 +22,7 @@ function attachmentKind(mimeType: string): "image" | "video" | "pdf" | "file" {
 export const createGroup = asyncHandler(async (req, res) => {
   if (!req.user) throw new AppError("Authentication required", 401);
 
-  const memberIds = [...new Set([req.user.id, ...(req.body.memberIds as string[])])].map((id) =>
+  const memberIds = [...new Set([req.user.id, ...((req.body.memberIds as string[]) ?? [])])].map((id) =>
     toObjectId(id, "member id")
   );
   const members = await User.find({ _id: { $in: memberIds }, isActive: true }).select("_id");

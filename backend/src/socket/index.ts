@@ -24,7 +24,7 @@ export function createSocketServer(httpServer: HttpServer): Server {
       const payload = verifyAccessToken(token);
       socket.data.user = { id: payload.sub, role: payload.role };
       next();
-    } catch (error) {
+    } catch {
       next(new Error("Authentication error: Invalid token"));
     }
   });

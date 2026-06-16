@@ -22,8 +22,8 @@ export function LoginPage() {
     try {
       await login(emailOrUsername, password);
       navigate("/");
-    } catch {
-      setError("Invalid email, username, or password.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid email, username, or password.");
     } finally {
       setSubmitting(false);
     }
@@ -42,10 +42,10 @@ export function LoginPage() {
           </div>
         </div>
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <Input placeholder="Email or username" value={emailOrUsername} onChange={(event) => setEmailOrUsername(event.target.value)} required />
-          <Input placeholder="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button className="w-full" disabled={submitting}>{submitting ? "Signing in" : "Sign in"}</Button>
+          <Input placeholder="Email or username" value={emailOrUsername} onChange={(e) => setEmailOrUsername(e.target.value)} required />
+          <Input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <Button className="w-full" disabled={submitting}>{submitting ? "Signing in…" : "Sign in"}</Button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
           New to FlowChat? <Link className="font-semibold text-primary" to="/register">Create an account</Link>
@@ -54,4 +54,3 @@ export function LoginPage() {
     </div>
   );
 }
-

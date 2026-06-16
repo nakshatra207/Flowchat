@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { useAuthStore } from "../store/auth-store";
+import type { AuthError } from "@supabase/supabase-js";
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -21,8 +22,9 @@ export function RegisterPage() {
     try {
       await register(form);
       navigate("/");
-    } catch {
-      setError("Could not create that account. Try a different email or username.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : (err as AuthError)?.message ?? "Registration failed.";
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -41,12 +43,12 @@ export function RegisterPage() {
           </div>
         </div>
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <Input placeholder="Display name" value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} required />
-          <Input placeholder="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} required />
-          <Input placeholder="Email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required />
-          <Input placeholder="Password" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required />
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button className="w-full" disabled={submitting}>{submitting ? "Creating account" : "Create account"}</Button>
+          <Input placeholder="Display name" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} required />
+          <Input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
+          <Input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+          <Input placeholder="Password (min 8 chars)" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} />
+          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <Button className="w-full" disabled={submitting}>{submitting ? "Creating account…" : "Create account"}</Button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
           Already have an account? <Link className="font-semibold text-primary" to="/login">Sign in</Link>
@@ -55,4 +57,3 @@ export function RegisterPage() {
     </div>
   );
 }
-

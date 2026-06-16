@@ -1,19 +1,19 @@
-import mongoose from "mongoose";
+import postgres from "postgres";
 import { env } from "./env.js";
 import { logger } from "../utils/logger.js";
 
+export const sql = postgres(env.databaseUrl, {
+  max: 10,
+  idle_timeout: 30,
+  connect_timeout: 10
+});
+
 export async function connectDatabase(): Promise<void> {
-  mongoose.set("strictQuery", true);
-
-  await mongoose.connect(env.mongodbUri, {
-    autoIndex: !env.isProduction
-  });
-
-  logger.info("MongoDB connection established");
+  await sql`SELECT 1`;
+  logger.info("Supabase PostgreSQL connection established");
 }
 
 export async function disconnectDatabase(): Promise<void> {
-  await mongoose.disconnect();
-  logger.info("MongoDB connection closed");
+  await sql.end();
+  logger.info("PostgreSQL connection closed");
 }
-

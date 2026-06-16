@@ -11,7 +11,7 @@ const envSchema = Joi.object({
   NODE_ENV: Joi.string().valid("development", "test", "production").default("development"),
   PORT: Joi.number().port().default(4000),
   CLIENT_ORIGIN: Joi.string().uri().required(),
-  MONGODB_URI: Joi.string().required(),
+  DATABASE_URL: Joi.string().required(),
   JWT_ACCESS_SECRET: Joi.string().min(32).required(),
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),
   JWT_ACCESS_EXPIRES_IN: Joi.string().default("15m"),
@@ -36,7 +36,7 @@ export const env = {
   nodeEnv: value.NODE_ENV as "development" | "test" | "production",
   port: Number(value.PORT),
   clientOrigin: value.CLIENT_ORIGIN as string,
-  mongodbUri: value.MONGODB_URI as string,
+  databaseUrl: value.DATABASE_URL as string,
   jwtAccessSecret: value.JWT_ACCESS_SECRET as string,
   jwtRefreshSecret: value.JWT_REFRESH_SECRET as string,
   jwtAccessExpiresIn: value.JWT_ACCESS_EXPIRES_IN as string,
@@ -49,4 +49,3 @@ export const env = {
   isProduction: value.NODE_ENV === "production",
   isTest: value.NODE_ENV === "test"
 };
-

@@ -1,5 +1,5 @@
 export interface User {
-  _id: string;
+  id: string;
   email: string;
   username: string;
   displayName: string;
@@ -17,37 +17,36 @@ export interface AuthTokens {
 }
 
 export interface Conversation {
-  _id: string;
+  id: string;
   type: "direct" | "group";
   title?: string;
   participants: User[];
   group?: Group;
   lastMessage?: Message;
   lastMessageAt?: string;
-  unreadCounts?: Record<string, number>;
+  unreadCount?: number;
 }
 
 export interface Message {
-  _id: string;
-  conversation: string;
+  id: string;
+  conversation_id: string;
   sender: User;
   content: string;
   attachments: Attachment[];
-  reactions: Array<{ user: string; emoji: string }>;
-  readBy: Array<{ user: string; readAt: string }>;
+  reactions: Array<{ user_id: string; emoji: string }>;
+  reads: Array<{ user_id: string; read_at: string }>;
   editedAt?: string | null;
   deletedAt?: string | null;
   createdAt: string;
 }
 
 export interface Group {
-  _id: string;
+  id: string;
   name: string;
   description: string;
   avatarUrl?: string | null;
-  owner: string | User;
-  admins: Array<string | User>;
-  members: Array<string | User>;
+  ownerId: string;
+  members: Array<{ userId: string; isAdmin: boolean }>;
   permissions: {
     onlyAdminsCanMessage: boolean;
     onlyAdminsCanInvite: boolean;
@@ -56,7 +55,7 @@ export interface Group {
 }
 
 export interface Attachment {
-  _id: string;
+  id: string;
   originalName: string;
   mimeType: string;
   size: number;
@@ -65,11 +64,10 @@ export interface Attachment {
 }
 
 export interface NotificationItem {
-  _id: string;
+  id: string;
   type: "message" | "mention" | "reaction" | "group_invite" | "system";
   title: string;
   body: string;
   readAt?: string | null;
   createdAt: string;
 }
-

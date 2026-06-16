@@ -18,23 +18,30 @@ function dbRowToUser(row: Record<string, unknown>): User {
     email: row.email as string,
     username: row.username as string,
     displayName: (row.display_name as string) ?? "",
-    avatarUrl: row.avatar_url as string | null,
+    avatarUrl: (row.avatar_url as string) ?? null,
     bio: (row.bio as string) ?? "",
     statusMessage: (row.status_message as string) ?? "",
     role: (row.role as User["role"]) ?? "user",
     presence: (row.presence as User["presence"]) ?? "offline",
-    lastSeenAt: row.last_seen_at as string | null
+    lastSeenAt: (row.last_seen_at as string) ?? null,
   };
 }
 
-async function fetchProfile(userId: string): Promise<User | null> {
-  const { data } = await supabase
-    .from("users")
-    .select("id, email, username, display_name, avatar_url, bio, status_message, role, presence, last_seen_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!data) return null;
-  return dbRowToUser(data as Record<string, unknown>);
+async function fetchProfile(userId: string, retries = 3): Promise<User | null> {
+  for (let i = 0; i < retries; i++) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, email, username, display_name, avatar_url, bio, status_message, role, presence, last_seen_at")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (data) return dbRowToUser(data as Record<string, unknown>);
+    // Row not yet created by trigger — wait and retry
+    if (!error && !data && i < retries - 1) {
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
+  return null;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -42,16 +49,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: true,
 
   async login(emailOrUsername, password) {
-    let email = emailOrUsername;
+    let email = emailOrUsername.trim();
 
-    // Username login: look up email first (this works as anon since users are public-readable)
-    if (!emailOrUsername.includes("@")) {
-      const { data: row, error: lookupErr } = await supabase
+    if (!email.includes("@")) {
+      const { data: row } = await supabase
         .from("users")
         .select("email")
-        .eq("username", emailOrUsername)
+        .eq("username", email)
         .maybeSingle();
-      if (lookupErr || !row) throw new Error("No account found with that username.");
+      if (!row) throw new Error("No account found with that username.");
       email = row.email as string;
     }
 
@@ -65,39 +71,38 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   async register({ email, username, displayName, password }) {
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: email.trim(),
       password,
       options: {
-        data: { username, display_name: displayName },
-        // Skip email confirmation for this app
-        emailRedirectTo: undefined
-      }
+        data: { username: username.trim(), display_name: displayName.trim() },
+      },
     });
 
     if (error) throw new Error(error.message);
     if (!data.user) throw new Error("Registration failed. Please try again.");
 
-    // If we have a session the user is signed in immediately (email confirm disabled)
-    if (data.session) {
-      // Give the DB trigger a moment to create the public.users row
-      await new Promise((r) => setTimeout(r, 800));
-      const profile = await fetchProfile(data.user.id);
-      set({ user: profile });
-      return;
+    // No session means email confirmation is required
+    if (!data.session) {
+      throw new Error("Please check your email to confirm your account, then sign in.");
     }
 
-    // Email confirmation required — inform user
-    throw new Error("Check your email to confirm your account, then sign in.");
+    // Session exists — user is logged in. Retry profile fetch until trigger creates the row.
+    const profile = await fetchProfile(data.user.id, 5);
+    set({ user: profile });
   },
 
   async bootstrap() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        set({ loading: false });
+        return;
+      }
+      const profile = await fetchProfile(session.user.id);
+      set({ user: profile, loading: false });
+    } catch {
       set({ loading: false });
-      return;
     }
-    const profile = await fetchProfile(session.user.id);
-    set({ user: profile, loading: false });
   },
 
   async logout() {
@@ -107,5 +112,5 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   updateUser(user) {
     set({ user });
-  }
+  },
 }));

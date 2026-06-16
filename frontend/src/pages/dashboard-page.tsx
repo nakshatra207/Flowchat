@@ -40,7 +40,7 @@ function dbMsgToMessage(row: DbMessage): Message {
       displayName: row.sender.display_name,
       avatarUrl: row.sender.avatar_url,
       role: "user",
-      presence: "offline"
+      presence: "offline",
     } as User,
     content: row.content,
     attachments: [],
@@ -48,7 +48,7 @@ function dbMsgToMessage(row: DbMessage): Message {
     reads: [],
     editedAt: row.edited_at,
     deletedAt: row.deleted_at,
-    createdAt: row.created_at
+    createdAt: row.created_at,
   };
 }
 
@@ -59,14 +59,17 @@ export function DashboardPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
 
   const activeConv = conversations.find((c) => c.id === activeId);
 
+  // Load conversations — activeId excluded from deps to prevent loop
   const loadConversations = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
       .from("conversation_participants")
-      .select(`conversation_id, unread_count, conversations!inner(id, type, title, last_message_at, group_id, groups(name))`)
+      .select("conversation_id, unread_count, conversations!inner(id, type, title, last_message_at, group_id, groups(name))")
       .eq("user_id", user.id);
 
     if (!data) return;
@@ -80,21 +83,34 @@ export function DashboardPage() {
         last_message_at: conv.last_message_at as string | null,
         group_id: conv.group_id as string | null,
         groups: conv.groups as { name: string } | null,
-        unread: row.unread_count
+        unread: row.unread_count,
       };
     });
 
     setConversations(convs);
-    if (!activeId && convs.length > 0) setActiveId(convs[0].id);
-  }, [user, activeId]);
+    // Only auto-select first conversation if none is active yet
+    setActiveId((prev) => (prev || (convs.length > 0 ? convs[0].id : "")));
+  }, [user]);
 
   useEffect(() => {
-    if (!user) return;
     loadConversations();
-  }, [user, loadConversations]);
+  }, [loadConversations]);
+
+  const loadMessages = useCallback(async (convId: string) => {
+    const { data } = await supabase
+      .from("messages")
+      .select("id, conversation_id, sender_id, content, created_at, edited_at, deleted_at, sender:users!sender_id(id, username, display_name, avatar_url)")
+      .eq("conversation_id", convId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    if (data) setMessages((data as unknown as DbMessage[]).map(dbMsgToMessage));
+  }, []);
 
   useEffect(() => {
     if (!activeId || !user) return;
+    setMessages([]);
     loadMessages(activeId);
 
     const channel = supabase
@@ -117,40 +133,29 @@ export function DashboardPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeId, user]);
+  }, [activeId, user, loadMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function loadMessages(convId: string) {
-    const { data } = await supabase
-      .from("messages")
-      .select("id, conversation_id, sender_id, content, created_at, edited_at, deleted_at, sender:users!sender_id(id, username, display_name, avatar_url)")
-      .eq("conversation_id", convId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true })
-      .limit(50);
-
-    if (data) setMessages((data as unknown as DbMessage[]).map(dbMsgToMessage));
-  }
-
   async function handleSend(event: FormEvent) {
     event.preventDefault();
-    if (!content.trim() || !activeId || !user) return;
+    const convId = activeIdRef.current;
+    if (!content.trim() || !convId || !user) return;
     const text = content.trim();
     setContent("");
 
     await supabase.from("messages").insert({
-      conversation_id: activeId,
+      conversation_id: convId,
       sender_id: user.id,
-      content: text
+      content: text,
     });
 
     await supabase
       .from("conversations")
       .update({ last_message_at: new Date().toISOString() })
-      .eq("id", activeId);
+      .eq("id", convId);
   }
 
   function convLabel(conv: DbConversation) {
@@ -168,13 +173,15 @@ export function DashboardPage() {
         </div>
         <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
           {conversations.length === 0 ? (
-            <div className="p-4 text-sm text-slate-500">No conversations yet. Create a group to get started.</div>
+            <div className="p-4 text-sm text-slate-500">
+              No conversations yet. Create a group to get started.
+            </div>
           ) : (
             conversations.map((conv) => (
               <button
                 key={conv.id}
                 className={cn(
-                  "flex w-full items-center gap-3 border-b border-border p-4 text-left hover:bg-muted/60 transition-colors",
+                  "flex w-full items-center gap-3 border-b border-border p-4 text-left transition-colors hover:bg-muted/60",
                   activeId === conv.id && "bg-muted"
                 )}
                 onClick={() => setActiveId(conv.id)}
@@ -199,18 +206,37 @@ export function DashboardPage() {
       <Card className="flex min-h-[620px] flex-col overflow-hidden">
         <div className="border-b border-border p-4">
           <h2 className="font-semibold">{activeConv ? convLabel(activeConv) : "Chat"}</h2>
-          <p className="text-sm text-slate-500">{activeConv ? "Active conversation" : "Select a conversation"}</p>
+          <p className="text-sm text-slate-500">
+            {activeConv ? "Active conversation" : "Select a conversation"}
+          </p>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
           {messages.map((message) => {
             const mine = message.sender?.id === user?.id;
             return (
               <div key={message.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
-                <div className={cn("max-w-[78%] rounded-lg px-3 py-2 text-sm", mine ? "bg-primary text-white" : "bg-white text-slate-900 shadow-sm")}>
-                  {!mine && <div className="mb-1 text-xs font-medium opacity-75">{message.sender?.displayName}</div>}
+                <div
+                  className={cn(
+                    "max-w-[78%] rounded-lg px-3 py-2 text-sm",
+                    mine ? "bg-primary text-white" : "bg-white text-slate-900 shadow-sm"
+                  )}
+                >
+                  {!mine && (
+                    <div className="mb-1 text-xs font-medium opacity-75">
+                      {message.sender?.displayName}
+                    </div>
+                  )}
                   <div>{message.content}</div>
-                  <div className={cn("mt-1 text-right text-xs opacity-50", mine ? "text-white" : "text-slate-500")}>
-                    {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  <div
+                    className={cn(
+                      "mt-1 text-right text-xs opacity-50",
+                      mine ? "text-white" : "text-slate-500"
+                    )}
+                  >
+                    {new Date(message.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </div>
                 </div>
               </div>
@@ -220,7 +246,7 @@ export function DashboardPage() {
         </div>
         <form className="flex gap-2 border-t border-border p-3" onSubmit={handleSend}>
           <button
-            className="grid size-10 shrink-0 place-items-center rounded-md border border-border bg-white hover:bg-muted transition-colors"
+            className="grid size-10 shrink-0 place-items-center rounded-md border border-border bg-white transition-colors hover:bg-muted"
             type="button"
             aria-label="Attach file"
           >

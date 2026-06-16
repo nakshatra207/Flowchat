@@ -27,24 +27,27 @@ function dbRowToUser(row: Record<string, unknown>): User {
   };
 }
 
-async function fetchProfile(userId: string, retries = 3): Promise<User | null> {
+async function fetchProfile(userId: string, retries = 4): Promise<User | null> {
   for (let i = 0; i < retries; i++) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("users")
       .select("id, email, username, display_name, avatar_url, bio, status_message, role, presence, last_seen_at")
       .eq("id", userId)
       .maybeSingle();
-
     if (data) return dbRowToUser(data as Record<string, unknown>);
-    // Row not yet created by trigger — wait and retry
-    if (!error && !data && i < retries - 1) {
-      await new Promise((r) => setTimeout(r, 600));
-    }
+    if (i < retries - 1) await new Promise((r) => setTimeout(r, 700));
   }
   return null;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+async function setPresence(userId: string, presence: "online" | "offline") {
+  await supabase
+    .from("users")
+    .update({ presence, last_seen_at: new Date().toISOString() })
+    .eq("id", userId);
+}
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: true,
 
@@ -58,7 +61,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         .eq("username", email)
         .maybeSingle();
       if (!row) throw new Error("No account found with that username.");
-      email = row.email as string;
+      email = (row as { email: string }).email;
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -66,7 +69,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (!data.user) throw new Error("Login failed. Please try again.");
 
     const profile = await fetchProfile(data.user.id);
-    set({ user: profile });
+    if (profile) await setPresence(profile.id, "online");
+    set({ user: profile ? { ...profile, presence: "online" } : null });
   },
 
   async register({ email, username, displayName, password }) {
@@ -81,14 +85,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (error) throw new Error(error.message);
     if (!data.user) throw new Error("Registration failed. Please try again.");
 
-    // No session means email confirmation is required
     if (!data.session) {
       throw new Error("Please check your email to confirm your account, then sign in.");
     }
 
-    // Session exists — user is logged in. Retry profile fetch until trigger creates the row.
     const profile = await fetchProfile(data.user.id, 5);
-    set({ user: profile });
+    if (profile) await setPresence(profile.id, "online");
+    set({ user: profile ? { ...profile, presence: "online" } : null });
   },
 
   async bootstrap() {
@@ -99,13 +102,16 @@ export const useAuthStore = create<AuthState>((set) => ({
         return;
       }
       const profile = await fetchProfile(session.user.id);
-      set({ user: profile, loading: false });
+      if (profile) await setPresence(profile.id, "online");
+      set({ user: profile ? { ...profile, presence: "online" } : null, loading: false });
     } catch {
       set({ loading: false });
     }
   },
 
   async logout() {
+    const { user } = get();
+    if (user) await setPresence(user.id, "offline");
     await supabase.auth.signOut();
     set({ user: null });
   },
